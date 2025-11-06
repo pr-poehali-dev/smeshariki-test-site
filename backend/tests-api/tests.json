@@ -1,0 +1,42 @@
+{
+  "tests": [
+    {
+      "name": "Get all tests",
+      "method": "GET",
+      "path": "/?path=tests",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "0": {
+          "id": "number",
+          "title": "string"
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get test by ID",
+      "method": "GET",
+      "path": "/?path=test&id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "id": "number",
+        "title": "string",
+        "questions": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get leaderboard",
+      "method": "GET",
+      "path": "/?path=leaderboard",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "0": {
+          "username": "string",
+          "total_score": "number"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,47 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
 import Icon from '@/components/ui/icon';
+import TestQuiz from '@/components/TestQuiz';
+import TestResult from '@/components/TestResult';
+import { useToast } from '@/hooks/use-toast';
+
+const API_URL = 'https://functions.poehali.dev/3eae5057-9e0e-4c6c-866c-7bb80f3bfe58';
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('home');
-
-  const tests = [
-    {
-      id: 1,
-      title: 'Какой ты Смешарик?',
-      description: 'Узнай, какой персонаж из мультика похож на тебя!',
-      image: 'https://cdn.poehali.dev/projects/9923a66a-b443-4d64-a22f-d6a4231f18e2/files/6c1fec22-e997-4014-9f79-640a289038e1.jpg',
-      questions: 12,
-      completed: 8547,
-      difficulty: 'Легкий',
-      category: '🎭 Личность'
-    },
-    {
-      id: 2,
-      title: 'Знаток Смешариков',
-      description: 'Проверь свои знания о мультфильме!',
-      image: 'https://cdn.poehali.dev/projects/9923a66a-b443-4d64-a22f-d6a4231f18e2/files/56f9523e-cde5-408c-9695-aef579270cc1.jpg',
-      questions: 20,
-      completed: 6234,
-      difficulty: 'Средний',
-      category: '🧠 Знания'
-    },
-    {
-      id: 3,
-      title: 'Мир Смешариков',
-      description: 'Проверь, как хорошо ты знаешь вселенную Смешариков!',
-      image: 'https://cdn.poehali.dev/projects/9923a66a-b443-4d64-a22f-d6a4231f18e2/files/4ce47e0c-4dbe-48c4-b82a-666e969bbdc1.jpg',
-      questions: 15,
-      completed: 4892,
-      difficulty: 'Сложный',
-      category: '🌍 Вселенная'
-    }
-  ];
+  const [tests, setTests] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [currentTest, setCurrentTest] = useState<any>(null);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [username, setUsername] = useState('Гость');
+  const [isLoading, setIsLoading] = useState(false);
+  const [userStats, setUserStats] = useState<any>(null);
+  const { toast } = useToast();
 
   const characters = [
     { name: 'Крош', color: 'bg-game-blue', trait: 'Энергичный', emoji: '🐰' },
@@ -61,22 +42,136 @@ const Index = () => {
     { id: 4, title: 'Легенда', description: 'Займи первое место в рейтинге', icon: 'Crown', unlocked: false }
   ];
 
-  const leaderboard = [
-    { rank: 1, name: 'Алексей К.', score: 2450, avatar: '🏆', tests: 45 },
-    { rank: 2, name: 'Мария С.', score: 2180, avatar: '🥈', tests: 38 },
-    { rank: 3, name: 'Дмитрий П.', score: 1950, avatar: '🥉', tests: 32 },
-    { rank: 4, name: 'Ольга Н.', score: 1720, avatar: '🎯', tests: 28 },
-    { rank: 5, name: 'Иван Т.', score: 1590, avatar: '⭐', tests: 25 }
-  ];
+  useEffect(() => {
+    loadTests();
+    loadLeaderboard();
+  }, []);
 
-  const userProfile = {
-    name: 'Игрок',
-    level: 12,
-    score: 1850,
-    testsCompleted: 28,
-    character: 'Крош',
-    avatar: 'https://cdn.poehali.dev/projects/9923a66a-b443-4d64-a22f-d6a4231f18e2/files/6c1fec22-e997-4014-9f79-640a289038e1.jpg'
+  const loadTests = async () => {
+    try {
+      const response = await fetch(`${API_URL}?path=tests`);
+      const data = await response.json();
+      setTests(data);
+    } catch (error) {
+      console.error('Failed to load tests:', error);
+    }
   };
+
+  const loadLeaderboard = async () => {
+    try {
+      const response = await fetch(`${API_URL}?path=leaderboard`);
+      const data = await response.json();
+      setLeaderboard(data);
+    } catch (error) {
+      console.error('Failed to load leaderboard:', error);
+    }
+  };
+
+  const startTest = async (testId: number) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}?path=test&id=${testId}`);
+      const data = await response.json();
+      setCurrentTest(data);
+      setTestResult(null);
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить тест',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTestComplete = async (result: { character: string; score: number }) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}?path=submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username,
+          test_id: currentTest.id,
+          score: result.score,
+          result_character: result.character,
+          result_text: `Вы получили персонажа ${result.character}!`
+        })
+      });
+
+      const data = await response.json();
+      setUserStats(data.user_stats);
+      setTestResult(result);
+      
+      await loadLeaderboard();
+      await loadTests();
+
+      toast({
+        title: 'Тест завершён!',
+        description: `Вы получили ${result.score} очков!`
+      });
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось сохранить результат',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackToTests = () => {
+    setCurrentTest(null);
+    setTestResult(null);
+    setActiveTab('tests');
+  };
+
+  const handleTakeAnother = () => {
+    setCurrentTest(null);
+    setTestResult(null);
+    setActiveTab('tests');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="Loader2" size={48} className="animate-spin text-primary mx-auto mb-4" />
+          <p className="text-lg text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (testResult) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-game-lavender via-white to-game-sky py-12 px-4">
+        <TestResult
+          character={testResult.character}
+          score={testResult.score}
+          userStats={userStats}
+          onBackToTests={handleBackToTests}
+          onTakeAnother={handleTakeAnother}
+        />
+      </div>
+    );
+  }
+
+  if (currentTest) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-game-lavender via-white to-game-sky py-12 px-4">
+        <TestQuiz
+          test={currentTest}
+          onComplete={handleTestComplete}
+          onBack={() => setCurrentTest(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-game-lavender via-white to-game-sky">
@@ -89,6 +184,15 @@ const Index = () => {
             <p className="text-xl text-muted-foreground">
               Проверь свои знания о любимых персонажах!
             </p>
+            <div className="mt-4 max-w-xs mx-auto">
+              <Input
+                type="text"
+                placeholder="Введи своё имя"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="text-center"
+              />
+            </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -130,15 +234,15 @@ const Index = () => {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 text-center">
-                      <div className="text-4xl font-bold">{userProfile.testsCompleted}</div>
+                      <div className="text-4xl font-bold">{userStats?.tests_completed || 0}</div>
                       <div className="text-sm opacity-90">Пройдено тестов</div>
                     </div>
                     <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 text-center">
-                      <div className="text-4xl font-bold">{userProfile.score}</div>
+                      <div className="text-4xl font-bold">{userStats?.total_score || 0}</div>
                       <div className="text-sm opacity-90">Очков заработано</div>
                     </div>
                     <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 text-center">
-                      <div className="text-4xl font-bold">{userProfile.level}</div>
+                      <div className="text-4xl font-bold">{userStats?.level || 1}</div>
                       <div className="text-sm opacity-90">Уровень</div>
                     </div>
                   </div>
@@ -151,16 +255,17 @@ const Index = () => {
                   Популярные тесты
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {tests.map((test, index) => (
+                  {tests.slice(0, 3).map((test, index) => (
                     <Card 
                       key={test.id} 
                       className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 cursor-pointer border-2 hover:border-primary animate-fade-in"
                       style={{ animationDelay: `${index * 0.1}s` }}
+                      onClick={() => startTest(test.id)}
                     >
                       <CardHeader className="p-0">
                         <div className="relative overflow-hidden rounded-t-lg h-48">
                           <img 
-                            src={test.image} 
+                            src={test.image_url} 
                             alt={test.title}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                           />
@@ -177,11 +282,11 @@ const Index = () => {
                         <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
                           <span className="flex items-center gap-1">
                             <Icon name="FileQuestion" size={16} />
-                            {test.questions} вопросов
+                            {test.questions_count} вопросов
                           </span>
                           <span className="flex items-center gap-1">
                             <Icon name="Users" size={16} />
-                            {test.completed.toLocaleString()}
+                            {test.completed_count.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -203,16 +308,6 @@ const Index = () => {
             <TabsContent value="tests" className="space-y-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold">Все тесты</h2>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
-                    <Icon name="Filter" size={16} className="mr-2" />
-                    Фильтры
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Icon name="ArrowUpDown" size={16} className="mr-2" />
-                    Сортировка
-                  </Button>
-                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tests.map((test, index) => (
@@ -220,10 +315,11 @@ const Index = () => {
                     key={test.id} 
                     className="hover:shadow-lg transition-all cursor-pointer animate-fade-in"
                     style={{ animationDelay: `${index * 0.1}s` }}
+                    onClick={() => startTest(test.id)}
                   >
                     <CardHeader className="p-0">
                       <img 
-                        src={test.image} 
+                        src={test.image_url} 
                         alt={test.title}
                         className="w-full h-40 object-cover rounded-t-lg"
                       />
@@ -235,8 +331,8 @@ const Index = () => {
                       </div>
                       <CardDescription className="mb-3 text-sm">{test.description}</CardDescription>
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
-                        <span>{test.questions} вопросов</span>
-                        <span>{test.completed.toLocaleString()} прошли</span>
+                        <span>{test.questions_count} вопросов</span>
+                        <span>{test.completed_count.toLocaleString()} прошли</span>
                       </div>
                       <Button className="w-full" size="sm">
                         Пройти тест
@@ -312,37 +408,33 @@ const Index = () => {
             <TabsContent value="leaderboard" className="space-y-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-3xl font-bold">Таблица лидеров</h2>
-                <Button variant="outline" size="sm">
-                  <Icon name="Calendar" size={16} className="mr-2" />
-                  За эту неделю
-                </Button>
               </div>
               <Card>
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     {leaderboard.map((player, index) => (
                       <div 
-                        key={player.rank}
+                        key={index}
                         className={`flex items-center gap-4 p-4 rounded-lg transition-all hover:bg-muted/50 cursor-pointer animate-fade-in ${
-                          player.rank <= 3 ? 'bg-gradient-to-r from-game-lavender/30 to-transparent' : ''
+                          index < 3 ? 'bg-gradient-to-r from-game-lavender/30 to-transparent' : ''
                         }`}
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
                         <div className="text-3xl font-bold w-12 text-center">
-                          {player.rank <= 3 ? player.avatar : `#${player.rank}`}
+                          {index < 3 ? ['🏆', '🥈', '🥉'][index] : `#${index + 1}`}
                         </div>
                         <Avatar className="w-12 h-12">
-                          <AvatarFallback className="text-xl">{player.name[0]}</AvatarFallback>
+                          <AvatarFallback className="text-xl">{player.username[0]}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
-                          <div className="font-bold text-lg">{player.name}</div>
+                          <div className="font-bold text-lg">{player.username}</div>
                           <div className="text-sm text-muted-foreground">
-                            {player.tests} тестов пройдено
+                            {player.tests_completed} тестов пройдено
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold text-primary">
-                            {player.score.toLocaleString()}
+                            {player.total_score.toLocaleString()}
                           </div>
                           <div className="text-xs text-muted-foreground">очков</div>
                         </div>
@@ -358,16 +450,14 @@ const Index = () => {
                 <CardContent className="p-8">
                   <div className="flex items-center gap-6 mb-6">
                     <Avatar className="w-24 h-24 border-4 border-white">
-                      <AvatarImage src={userProfile.avatar} />
-                      <AvatarFallback className="text-3xl">{userProfile.name[0]}</AvatarFallback>
+                      <AvatarFallback className="text-3xl">{username[0]}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                      <h2 className="text-3xl font-bold mb-2">{userProfile.name}</h2>
+                      <h2 className="text-3xl font-bold mb-2">{username}</h2>
                       <div className="flex items-center gap-4">
                         <Badge className="bg-white/20 text-white text-sm">
-                          Уровень {userProfile.level}
+                          Уровень {userStats?.level || 1}
                         </Badge>
-                        <span className="text-white/90">Твой персонаж: {userProfile.character}</span>
                       </div>
                     </div>
                   </div>
@@ -375,9 +465,9 @@ const Index = () => {
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span>Прогресс до следующего уровня</span>
-                        <span>75%</span>
+                        <span>{((userStats?.total_score || 0) % 100)}%</span>
                       </div>
-                      <Progress value={75} className="h-3 bg-white/20" />
+                      <Progress value={(userStats?.total_score || 0) % 100} className="h-3 bg-white/20" />
                     </div>
                   </div>
                 </CardContent>
@@ -394,15 +484,11 @@ const Index = () => {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Пройдено тестов</span>
-                      <span className="font-bold">{userProfile.testsCompleted}</span>
+                      <span className="font-bold">{userStats?.tests_completed || 0}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Всего очков</span>
-                      <span className="font-bold text-primary">{userProfile.score}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Место в рейтинге</span>
-                      <span className="font-bold text-accent">4-е</span>
+                      <span className="font-bold text-primary">{userStats?.total_score || 0}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -428,13 +514,13 @@ const Index = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Icon name="TrendingUp" className="text-green-500" />
-                      Активность
+                      Уровень
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center">
-                      <div className="text-5xl font-bold text-green-500 mb-2">7</div>
-                      <p className="text-sm text-muted-foreground">дней подряд</p>
+                      <div className="text-5xl font-bold text-green-500 mb-2">{userStats?.level || 1}</div>
+                      <p className="text-sm text-muted-foreground">текущий</p>
                     </div>
                   </CardContent>
                 </Card>
